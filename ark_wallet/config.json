@@ -1,0 +1,11 @@
+{
+  "name": "Ark Wallet Pro",
+  "short_description": "Wallet Ark sécurisé avec Lightning via Boltz",
+  "tile": "/ark_wallet/static/image/ark-logo.png",
+  "contributors": [
+    "Silexperience210"
+  ],
+  "hidden": false,
+  "migration_module": "ark_wallet.migrations",
+  "db_name": "ext_ark_wallet"
+}

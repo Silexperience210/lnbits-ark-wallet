@@ -1,0 +1,14 @@
+{
+  "id": "ark_wallet",
+  "name": "Ark Wallet Pro",
+  "version": "1.0.0",
+  "short_description": "Wallet Ark sécurisé avec Lightning via Boltz",
+  "icon": "currency-bitcoin",
+  "details": "Wallet Ark auto-custodial avec chiffrement AES-256, intégration Lightning Network via Boltz swaps, interface futuriste néon plasma, gestion des VTXOs et support multi-réseau (mainnet/testnet/mutinynet)",
+  "author": "Silexperience210",
+  "contact": "https://github.com/Silexperience210",
+  "archive": "https://github.com/Silexperience210/lnbits-ark-wallet/archive/refs/tags/v1.0.0.zip",
+  "hash": "",
+  "dependencies": [],
+  "min_lnbits_version": "0.11.0"
+}

@@ -1,0 +1,483 @@
+{% extends "base.html" %}
+
+{% from "macros.jinja" import window_vars with context %}
+
+{% block page %}
+<div class="row q-col-gutter-md">
+  <div class="col-12">
+    <!-- Main Ark Wallet Interface -->
+    <q-card class="ark-wallet-card">
+      <q-card-section class="ark-header">
+        <div class="text-h5 ark-title">
+          <q-icon name="currency_bitcoin" class="ark-icon-pulse"></q-icon>
+          Ark Wallet Pro
+        </div>
+        <div class="text-subtitle2 ark-subtitle">Secure • Lightning • VTXOs</div>
+      </q-card-section>
+
+      <q-tabs
+        v-model="tab"
+        dense
+        class="text-primary ark-tabs"
+        active-color="primary"
+        indicator-color="primary"
+        align="justify"
+      >
+        <q-tab name="wallet" label="Wallet" />
+        <q-tab name="transactions" label="Transactions" />
+        <q-tab name="lightning" label="Lightning" />
+        <q-tab name="settings" label="Settings" />
+      </q-tabs>
+
+      <q-separator class="ark-separator" />
+
+      <q-tab-panels v-model="tab" animated class="ark-panels">
+        <!-- WALLET TAB -->
+        <q-tab-panel name="wallet">
+          <div class="ark-wallet-panel">
+            <!-- Create/Load Wallet Section -->
+            <div v-if="!currentWallet" class="ark-onboarding">
+              <div class="ark-welcome-card">
+                <q-icon name="rocket_launch" size="80px" class="ark-welcome-icon"></q-icon>
+                <h4 class="ark-welcome-title">Welcome to Ark Wallet Pro</h4>
+                <p class="ark-welcome-text">
+                  Create a new wallet or load an existing one to get started
+                </p>
+                
+                <div class="ark-action-buttons">
+                  <q-btn
+                    unelevated
+                    size="lg"
+                    icon="add_circle"
+                    label="Create Wallet"
+                    color="primary"
+                    class="ark-btn-create"
+                    @click="createWallet"
+                  />
+                  <q-btn
+                    unelevated
+                    outline
+                    size="lg"
+                    icon="folder_open"
+                    label="Load Wallet"
+                    color="primary"
+                    class="ark-btn-load"
+                    @click="loadWallet"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <!-- Active Wallet Section -->
+            <div v-else class="ark-active-wallet">
+              <!-- Balance Card -->
+              <div class="ark-balance-card">
+                <div class="ark-balance-header">
+                  <span class="ark-balance-label">Total Balance</span>
+                  <q-chip
+                    :icon="'circle'"
+                    :color="getNetworkColor(currentWallet.network)"
+                    text-color="white"
+                    size="sm"
+                  >
+                    {{ currentWallet.network }}
+                  </q-chip>
+                </div>
+                <div class="ark-balance-amount">
+                  <q-icon name="currency_bitcoin" size="32px"></q-icon>
+                  <span>{{ formatBalance(currentWallet.balance) }}</span>
+                  <span class="ark-balance-unit">sats</span>
+                </div>
+                <div class="ark-balance-actions">
+                  <q-btn
+                    round
+                    icon="refresh"
+                    color="primary"
+                    size="sm"
+                    @click="refreshBalance"
+                    :loading="refreshing"
+                  >
+                    <q-tooltip>Refresh Balance</q-tooltip>
+                  </q-btn>
+                </div>
+              </div>
+
+              <!-- Address & QR Code -->
+              <div class="ark-address-card">
+                <div class="ark-address-header">
+                  <q-icon name="qr_code_2" size="24px"></q-icon>
+                  <span>Receive Address</span>
+                </div>
+                <div class="ark-qr-container">
+                  <canvas id="qrcode" ref="qrCanvas"></canvas>
+                </div>
+                <div class="ark-address-text">
+                  <q-input
+                    v-model="walletAddress"
+                    readonly
+                    dense
+                    outlined
+                    class="ark-address-input"
+                  >
+                    <template v-slot:append>
+                      <q-btn
+                        flat
+                        round
+                        dense
+                        icon="content_copy"
+                        @click="copyAddress"
+                      >
+                        <q-tooltip>Copy Address</q-tooltip>
+                      </q-btn>
+                    </template>
+                  </q-input>
+                </div>
+              </div>
+
+              <!-- Send Ark -->
+              <div class="ark-send-card">
+                <div class="ark-card-title">
+                  <q-icon name="send" size="24px"></q-icon>
+                  <span>Send Ark</span>
+                </div>
+                <q-form @submit="sendArk" class="ark-send-form">
+                  <q-input
+                    v-model="sendForm.address"
+                    label="Recipient Address"
+                    outlined
+                    dense
+                    class="q-mb-md"
+                    :rules="[val => !!val || 'Address is required']"
+                  >
+                    <template v-slot:prepend>
+                      <q-icon name="person" />
+                    </template>
+                  </q-input>
+                  
+                  <q-input
+                    v-model.number="sendForm.amount"
+                    type="number"
+                    label="Amount (sats)"
+                    outlined
+                    dense
+                    class="q-mb-md"
+                    :rules="[
+                      val => val > 0 || 'Amount must be positive',
+                      val => val <= currentWallet.balance || 'Insufficient balance'
+                    ]"
+                  >
+                    <template v-slot:prepend>
+                      <q-icon name="currency_bitcoin" />
+                    </template>
+                  </q-input>
+                  
+                  <q-input
+                    v-model="sendForm.memo"
+                    label="Memo (optional)"
+                    outlined
+                    dense
+                    class="q-mb-md"
+                  >
+                    <template v-slot:prepend>
+                      <q-icon name="note" />
+                    </template>
+                  </q-input>
+                  
+                  <q-btn
+                    unelevated
+                    type="submit"
+                    label="Send Ark"
+                    color="primary"
+                    icon="send"
+                    class="full-width ark-btn-send"
+                    :loading="sending"
+                  />
+                </q-form>
+              </div>
+            </div>
+          </div>
+        </q-tab-panel>
+
+        <!-- TRANSACTIONS TAB -->
+        <q-tab-panel name="transactions">
+          <div class="ark-transactions-panel">
+            <div v-if="transactions.length === 0" class="ark-empty-state">
+              <q-icon name="receipt_long" size="80px" color="grey-5"></q-icon>
+              <p>No transactions yet</p>
+            </div>
+            <q-list v-else separator class="ark-tx-list">
+              <q-item
+                v-for="tx in transactions"
+                :key="tx.id"
+                clickable
+                @click="showTransactionDetails(tx)"
+                class="ark-tx-item"
+              >
+                <q-item-section avatar>
+                  <q-avatar :color="getTxColor(tx.tx_type)" text-color="white">
+                    <q-icon :name="getTxIcon(tx.tx_type)" />
+                  </q-avatar>
+                </q-item-section>
+
+                <q-item-section>
+                  <q-item-label class="ark-tx-type">
+                    {{ tx.tx_type }}
+                  </q-item-label>
+                  <q-item-label caption class="ark-tx-date">
+                    {{ formatDate(tx.created_at) }}
+                  </q-item-label>
+                </q-item-section>
+
+                <q-item-section side>
+                  <q-item-label class="ark-tx-amount">
+                    <span :class="tx.tx_type === 'receive' ? 'positive' : 'negative'">
+                      {{ tx.tx_type === 'receive' ? '+' : '-' }}{{ formatBalance(tx.amount) }}
+                    </span>
+                  </q-item-label>
+                  <q-item-label caption>
+                    <q-chip
+                      :color="getStatusColor(tx.status)"
+                      text-color="white"
+                      size="xs"
+                    >
+                      {{ tx.status }}
+                    </q-chip>
+                  </q-item-label>
+                </q-item-section>
+              </q-item>
+            </q-list>
+          </div>
+        </q-tab-panel>
+
+        <!-- LIGHTNING TAB -->
+        <q-tab-panel name="lightning">
+          <div class="ark-lightning-panel">
+            <div class="ark-card-title">
+              <q-icon name="flash_on" size="24px"></q-icon>
+              <span>Lightning Network via Boltz</span>
+            </div>
+
+            <!-- Swap In (Lightning -> Ark) -->
+            <div class="ark-swap-card q-mb-md">
+              <h6 class="ark-swap-title">
+                <q-icon name="call_received" />
+                Swap In (Lightning → Ark)
+              </h6>
+              <q-form @submit="swapIn" class="ark-swap-form">
+                <q-input
+                  v-model="swapInForm.invoice"
+                  label="Lightning Invoice"
+                  outlined
+                  dense
+                  type="textarea"
+                  rows="3"
+                  class="q-mb-md"
+                  :rules="[val => !!val || 'Invoice is required']"
+                  placeholder="lnbc..."
+                />
+                <q-btn
+                  unelevated
+                  type="submit"
+                  label="Swap Lightning to Ark"
+                  color="primary"
+                  icon="swap_horiz"
+                  class="full-width"
+                  :loading="swappingIn"
+                />
+              </q-form>
+            </div>
+
+            <!-- Swap Out (Ark -> Lightning) -->
+            <div class="ark-swap-card">
+              <h6 class="ark-swap-title">
+                <q-icon name="call_made" />
+                Swap Out (Ark → Lightning)
+              </h6>
+              <q-form @submit="swapOut" class="ark-swap-form">
+                <q-input
+                  v-model.number="swapOutForm.amount"
+                  type="number"
+                  label="Amount (sats)"
+                  outlined
+                  dense
+                  class="q-mb-md"
+                  :rules="[
+                    val => val >= 100000 || 'Minimum 100,000 sats',
+                    val => val <= 25000000 || 'Maximum 25,000,000 sats'
+                  ]"
+                />
+                <q-input
+                  v-model="swapOutForm.address"
+                  label="On-chain Address (for refund)"
+                  outlined
+                  dense
+                  class="q-mb-md"
+                  :rules="[val => !!val || 'Address is required']"
+                />
+                <q-btn
+                  unelevated
+                  type="submit"
+                  label="Swap Ark to Lightning"
+                  color="secondary"
+                  icon="swap_horiz"
+                  class="full-width"
+                  :loading="swappingOut"
+                />
+              </q-form>
+            </div>
+
+            <!-- Recent Swaps -->
+            <div class="ark-swaps-list q-mt-md" v-if="swaps.length > 0">
+              <h6 class="ark-swaps-title">Recent Swaps</h6>
+              <q-list separator>
+                <q-item
+                  v-for="swap in swaps"
+                  :key="swap.id"
+                  class="ark-swap-item"
+                >
+                  <q-item-section avatar>
+                    <q-avatar color="purple" text-color="white">
+                      <q-icon :name="swap.swap_type === 'submarine' ? 'call_received' : 'call_made'" />
+                    </q-avatar>
+                  </q-item-section>
+
+                  <q-item-section>
+                    <q-item-label>
+                      {{ swap.swap_type === 'submarine' ? 'LN → Ark' : 'Ark → LN' }}
+                    </q-item-label>
+                    <q-item-label caption>
+                      {{ formatDate(swap.created_at) }}
+                    </q-item-label>
+                  </q-item-section>
+
+                  <q-item-section side>
+                    <q-item-label>{{ formatBalance(swap.amount) }} sats</q-item-label>
+                    <q-chip
+                      :color="getStatusColor(swap.status)"
+                      text-color="white"
+                      size="xs"
+                    >
+                      {{ swap.status }}
+                    </q-chip>
+                  </q-item-section>
+                </q-item>
+              </q-list>
+            </div>
+          </div>
+        </q-tab-panel>
+
+        <!-- SETTINGS TAB -->
+        <q-tab-panel name="settings">
+          <div class="ark-settings-panel">
+            <!-- Wallet Info -->
+            <div class="ark-setting-card" v-if="currentWallet">
+              <h6 class="ark-setting-title">Wallet Information</h6>
+              <q-list>
+                <q-item>
+                  <q-item-section>
+                    <q-item-label overline>Wallet Name</q-item-label>
+                    <q-item-label>{{ currentWallet.wallet_name }}</q-item-label>
+                  </q-item-section>
+                </q-item>
+                <q-item>
+                  <q-item-section>
+                    <q-item-label overline>Network</q-item-label>
+                    <q-item-label>{{ currentWallet.network }}</q-item-label>
+                  </q-item-section>
+                </q-item>
+                <q-item>
+                  <q-item-section>
+                    <q-item-label overline>Created</q-item-label>
+                    <q-item-label>{{ formatDate(currentWallet.created_at) }}</q-item-label>
+                  </q-item-section>
+                </q-item>
+              </q-list>
+            </div>
+
+            <!-- Security -->
+            <div class="ark-setting-card">
+              <h6 class="ark-setting-title">Security</h6>
+              <q-list>
+                <q-item>
+                  <q-item-section avatar>
+                    <q-icon name="lock" color="green" />
+                  </q-item-section>
+                  <q-item-section>
+                    <q-item-label>Encryption</q-item-label>
+                    <q-item-label caption>AES-256-GCM</q-item-label>
+                  </q-item-section>
+                </q-item>
+                <q-item>
+                  <q-item-section avatar>
+                    <q-icon name="vpn_key" color="blue" />
+                  </q-item-section>
+                  <q-item-section>
+                    <q-item-label>Self-Custodial</q-item-label>
+                    <q-item-label caption>You control your keys</q-item-label>
+                  </q-item-section>
+                </q-item>
+              </q-list>
+            </div>
+
+            <!-- Danger Zone -->
+            <div class="ark-setting-card ark-danger-zone" v-if="currentWallet">
+              <h6 class="ark-setting-title text-negative">Danger Zone</h6>
+              <q-btn
+                unelevated
+                color="negative"
+                icon="delete"
+                label="Delete Wallet"
+                @click="confirmDeleteWallet"
+                class="full-width"
+              />
+            </div>
+          </div>
+        </q-tab-panel>
+      </q-tab-panels>
+    </q-card>
+  </div>
+</div>
+
+<!-- Dialogs & Modals -->
+<q-dialog v-model="showMnemonicDialog" persistent>
+  <q-card class="ark-mnemonic-card">
+    <q-card-section class="text-h6">
+      <q-icon name="warning" color="orange" />
+      Backup Your Mnemonic
+    </q-card-section>
+    <q-card-section>
+      <div class="ark-mnemonic-warning">
+        <p><strong>Write down these 12 words in order and keep them safe!</strong></p>
+        <p class="text-caption text-negative">
+          Anyone with these words can access your funds. Never share them online.
+        </p>
+      </div>
+      <div class="ark-mnemonic-grid">
+        <div
+          v-for="(word, index) in mnemonicWords"
+          :key="index"
+          class="ark-mnemonic-word"
+        >
+          <span class="ark-word-number">{{ index + 1 }}.</span>
+          <span class="ark-word-text">{{ word }}</span>
+        </div>
+      </div>
+    </q-card-section>
+    <q-card-actions align="right">
+      <q-btn
+        flat
+        label="I've Written It Down"
+        color="primary"
+        v-close-popup
+        @click="completeMnemonicBackup"
+      />
+    </q-card-actions>
+  </q-card>
+</q-dialog>
+{% endblock %}
+
+{% block scripts %}
+{{ window_vars(user) }}
+<script src="/extensions/ark_wallet/static/js/ark.js"></script>
+<script src="/extensions/ark_wallet/static/js/wallet.js"></script>
+{% endblock %}
